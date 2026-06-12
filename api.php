@@ -28,20 +28,23 @@ try {
     }
 } catch (Exception $e) {
     http_response_code(400);
-    echo json_encode(['error' => $e->getMessage()]);
+    echo json_encode(['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 }
 
 function listJobs() {
-    global $db;
-    $jobs = $db->query("SELECT * FROM jobs ORDER BY job_date DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $jobs = $GLOBALS['db']->query("SELECT * FROM jobs ORDER BY job_date DESC")->fetchAll(PDO::FETCH_ASSOC);
     echo json_encode($jobs);
 }
 
 function createJob() {
-    global $db;
     $data = json_decode(file_get_contents('php://input'), true);
     
-    $stmt = $db->prepare("
+    if (!$data || !isset($data['customer_name']) || !isset($data['job_value'])) {
+        echo json_encode(['error' => 'Missing required fields']);
+        return;
+    }
+    
+    $stmt = $GLOBALS['db']->prepare("
         INSERT INTO jobs (customer_name, customer_info, job_date, job_value, costs, amount_paid)
         VALUES (:customer_name, :customer_info, :job_date, :job_value, :costs, :amount_paid)
     ");
@@ -55,15 +58,14 @@ function createJob() {
         ':amount_paid' => $data['amount_paid'] ?? 0
     ]);
     
-    echo json_encode(['id' => $db->lastInsertId(), 'success' => true]);
+    echo json_encode(['id' => $GLOBALS['db']->lastInsertId(), 'success' => true]);
 }
 
 function updateJob() {
-    global $db;
     $data = json_decode(file_get_contents('php://input'), true);
     $id = $data['id'];
     
-    $stmt = $db->prepare("
+    $stmt = $GLOBALS['db']->prepare("
         UPDATE jobs SET
             customer_name = :customer_name,
             customer_info = :customer_info,
@@ -89,18 +91,15 @@ function updateJob() {
 }
 
 function deleteJob() {
-    global $db;
     $data = json_decode(file_get_contents('php://input'), true);
     $id = $data['id'];
     
-    $db->prepare("DELETE FROM jobs WHERE id = :id")->execute([':id' => $id]);
+    $GLOBALS['db']->prepare("DELETE FROM jobs WHERE id = :id")->execute([':id' => $id]);
     echo json_encode(['success' => true]);
 }
 
 function getStats() {
-    global $db;
-    
-    $result = $db->query("
+    $result = $GLOBALS['db']->query("
         SELECT
             COUNT(*) as total_jobs,
             SUM(job_value) as total_value,
